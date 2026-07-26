@@ -1,0 +1,18 @@
+# Copyright (c) 2026-Present Diagrid Inc.
+# SPDX-License-Identifier: BUSL-1.1
+
+# Run this example on Diagrid Catalyst (managed sidecar, managed KV + workflow):
+#   diagrid dev run -f catalyst.yaml --project <your-project>
+# Managed KV + workflow come from the Catalyst project, so no local resources are
+# referenced here (the ./resources redis store is only for local `dapr run`).
+version: 1
+common:
+  logLevel: info
+  appLogDestination: console
+  enableAppHealthCheck: false
+apps:
+  - appID: control-room
+    appDirPath: ./
+    command: ["go", "run", "."]
+    env:
+      GOWORK: "off"   # build this example standalone (ignore any parent go.work)

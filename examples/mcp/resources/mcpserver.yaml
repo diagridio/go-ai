@@ -1,0 +1,21 @@
+# Copyright (c) 2026-Present Diagrid Inc.
+# SPDX-License-Identifier: BUSL-1.1
+
+# A local MCP server for `dapr run`. Dapr connects to it over stdio and registers
+# its tools as built-in workflows (dapr.internal.mcp.everything.*) that the
+# example discovers and calls. The name here ("everything") is the server name
+# that DiscoverTools reports.
+#
+# On Diagrid Catalyst, create a managed MCP server instead of shipping this file:
+#   diagrid mcpserver create <name> --project <project> --url https://<mcp-server>/mcp
+apiVersion: dapr.io/v1alpha1
+kind: MCPServer
+metadata:
+  name: everything
+spec:
+  endpoint:
+    stdio:
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-everything"

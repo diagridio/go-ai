@@ -1,0 +1,20 @@
+# Copyright (c) 2026-Present Diagrid Inc.
+# SPDX-License-Identifier: BUSL-1.1
+
+# Local Dapr state store for `dapr run` — backs the workflow engine (including the
+# built-in MCP ListTools/CallTool workflows) and the go-ai agent registry. On
+# Diagrid Catalyst these are managed components, so you don't need this file.
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: kvstore
+spec:
+  type: state.redis
+  version: v1
+  metadata:
+    - name: redisHost
+      value: "localhost:6379"
+    - name: redisPassword
+      value: ""
+    - name: actorStateStore
+      value: "true"

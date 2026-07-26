@@ -1,0 +1,29 @@
+# Binaries and build output
+*.exe
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Test / coverage output
+*.test
+*.out
+coverage.*
+
+# Go workspace files (local-only; the repo builds standalone)
+go.work
+go.work.sum
+
+# Env / secrets
+.env
+.env.*
+*.local
+
+# macOS
+.DS_Store
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
