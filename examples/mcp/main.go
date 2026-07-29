@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	goai "github.com/diagridio/go-ai"
 	"github.com/diagridio/go-ai/adapters/langchaingo"
@@ -46,7 +47,9 @@ func main() {
 		fatal(fmt.Errorf("workflow client: %w", err))
 	}
 
-	tools, err := mcp.DiscoverTools(ctx, dc, wf)
+	discoverCtx, cancelDiscover := context.WithTimeout(ctx, 30*time.Second)
+	tools, err := mcp.DiscoverTools(discoverCtx, dc, wf)
+	cancelDiscover()
 	if err != nil {
 		fatal(fmt.Errorf("discover MCP tools: %w", err))
 	}
