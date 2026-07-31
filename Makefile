@@ -25,6 +25,7 @@ tidy:
 	cd adapters/eino && go mod tidy
 	cd examples/langchaingo && go mod tidy
 	cd examples/eino && go mod tidy
+	cd examples/mcp && go mod tidy
 
 build:
 	go build ./...
