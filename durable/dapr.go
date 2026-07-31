@@ -16,6 +16,8 @@ import (
 
 	"github.com/dapr/durabletask-go/workflow"
 	daprclient "github.com/dapr/go-sdk/client"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/diagridio/go-ai/agent"
 )
@@ -100,7 +102,7 @@ func (b *DaprBackend) Run(ctx context.Context, cg *agent.CompiledGraph, input ag
 		return nil, fmt.Errorf("durable: WorkflowName is required")
 	}
 	wfName := opts.WorkflowName
-	wfIn := graphWorkflowInput{Graph: cg.Name(), State: input, MaxSteps: opts.MaxSteps}
+	wfIn := graphWorkflowInput{Graph: cg.Name(), State: input, MaxSteps: opts.MaxSteps, NodeRetry: opts.NodeRetry}
 	schedOpts := []workflow.NewWorkflowOptions{workflow.WithInput(wfIn)}
 	if opts.InstanceID != "" {
 		schedOpts = append(schedOpts, workflow.WithInstanceID(opts.InstanceID))
@@ -108,7 +110,12 @@ func (b *DaprBackend) Run(ctx context.Context, cg *agent.CompiledGraph, input ag
 
 	id, err := b.client.ScheduleWorkflow(ctx, wfName, schedOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("durable: schedule workflow: %w", err)
+		// A caller-pinned ID that already exists is a resume: attach to the
+		// existing run instead of failing. An unpinned collision is a real error.
+		if opts.InstanceID == "" || status.Code(err) != codes.AlreadyExists {
+			return nil, fmt.Errorf("durable: schedule workflow: %w", err)
+		}
+		id = opts.InstanceID
 	}
 	meta, err := b.client.WaitForWorkflowCompletion(ctx, id, workflow.WithFetchPayloads(true))
 	if err != nil {
@@ -128,9 +135,10 @@ func (b *DaprBackend) Run(ctx context.Context, cg *agent.CompiledGraph, input ag
 }
 
 type graphWorkflowInput struct {
-	Graph    string      `json:"graph"`
-	State    agent.State `json:"state"`
-	MaxSteps int         `json:"max_steps"`
+	Graph     string           `json:"graph"`
+	State     agent.State      `json:"state"`
+	MaxSteps  int              `json:"max_steps"`
+	NodeRetry *NodeRetryPolicy `json:"node_retry,omitempty"`
 }
 
 type executeNodeInput struct {
@@ -167,7 +175,16 @@ func graphWorkflow(ctx *workflow.WorkflowContext) (any, error) {
 		}
 		var updates agent.State
 		actIn := executeNodeInput{Graph: in.Graph, Node: current, State: state}
-		if err := ctx.CallActivity(daprExecuteNodeName, workflow.WithActivityInput(actIn)).Await(&updates); err != nil {
+		callOpts := []workflow.CallActivityOption{workflow.WithActivityInput(actIn)}
+		if p := in.NodeRetry; p != nil {
+			callOpts = append(callOpts, workflow.WithActivityRetryPolicy(&workflow.RetryPolicy{
+				MaxAttempts:          p.MaxAttempts,
+				InitialRetryInterval: p.InitialInterval,
+				BackoffCoefficient:   p.BackoffCoefficient,
+				MaxRetryInterval:     p.MaxInterval,
+			}))
+		}
+		if err := ctx.CallActivity(daprExecuteNodeName, callOpts...).Await(&updates); err != nil {
 			return nil, fmt.Errorf("durable: node %q: %w", current, err)
 		}
 		state = cg.ApplyUpdates(state, updates)

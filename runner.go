@@ -34,6 +34,9 @@ type Config struct {
 	// Tools lists the agent's tools for the Catalyst view. Declaration only, wire
 	// them into the graph separately.
 	Tools []ToolInfo
+	// NodeRetry retries a failed node instead of ending the run. Nil fails on
+	// the first error.
+	NodeRetry *durable.NodeRetryPolicy
 }
 
 // ToolInfo declares a tool an agent exposes. Args holds the arguments JSON Schema.
@@ -49,6 +52,7 @@ type Runner struct {
 	client       daprclient.Client
 	record       registry.AgentRecord
 	workflowName string
+	nodeRetry    *durable.NodeRetryPolicy
 }
 
 // NewRunner compiles the graph, connects to Catalyst, registers the agent, and
@@ -131,6 +135,7 @@ func NewRunner(ctx context.Context, cfg Config) (*Runner, error) {
 		client:       client,
 		record:       record,
 		workflowName: workflowName,
+		nodeRetry:    cfg.NodeRetry,
 	}, nil
 }
 
@@ -170,6 +175,7 @@ func (r *Runner) Invoke(ctx context.Context, input any, opts ...InvokeOptions) (
 		InstanceID:   opt.InstanceID,
 		MaxSteps:     maxSteps,
 		WorkflowName: r.workflowName,
+		NodeRetry:    r.nodeRetry,
 	})
 }
 
