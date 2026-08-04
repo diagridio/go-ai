@@ -22,9 +22,6 @@ import (
 	"github.com/diagridio/go-ai/agent"
 )
 
-// daprExecuteNodeName is the single generic activity that runs any node.
-const daprExecuteNodeName = "GoAIExecuteNode"
-
 // graphRegistry resolves a graph name to its compiled closures in the worker
 // process, since the workflow and activity are addressed by name.
 var (
@@ -46,27 +43,26 @@ type DaprBackend struct {
 	cancel context.CancelFunc
 }
 
-// NewDaprBackend registers the workflow + activity, connects to the sidecar, and
-// starts the worker. The generic workflow is registered under each name in
-// workflowNames so runs surface under the agent's own workflow name in Catalyst.
-// At least one name is required.
-func NewDaprBackend(workflowNames ...string) (*DaprBackend, error) {
-	if len(workflowNames) == 0 {
-		return nil, fmt.Errorf("durable: at least one workflow name is required")
+// NewDaprBackend registers the graph workflow under workflowName and one activity
+// per node name, so each node shows under its own name in the Catalyst execution
+// view. It then connects to the sidecar and starts the worker.
+func NewDaprBackend(workflowName string, nodeNames []string) (*DaprBackend, error) {
+	if workflowName == "" {
+		return nil, fmt.Errorf("durable: workflow name is required")
 	}
 	r := workflow.NewRegistry()
+	if err := r.AddWorkflowN(workflowName, graphWorkflow); err != nil {
+		return nil, fmt.Errorf("durable: register workflow %q: %w", workflowName, err)
+	}
 	seen := map[string]bool{}
-	for _, name := range workflowNames {
+	for _, name := range nodeNames {
 		if name == "" || seen[name] {
 			continue
 		}
 		seen[name] = true
-		if err := r.AddWorkflowN(name, graphWorkflow); err != nil {
-			return nil, fmt.Errorf("durable: register workflow %q: %w", name, err)
+		if err := r.AddActivityN(name, executeNodeActivity); err != nil {
+			return nil, fmt.Errorf("durable: register node %q: %w", name, err)
 		}
-	}
-	if err := r.AddActivityN(daprExecuteNodeName, executeNodeActivity); err != nil {
-		return nil, fmt.Errorf("durable: register activity: %w", err)
 	}
 	c, err := daprclient.NewWorkflowClient()
 	if err != nil {
@@ -184,7 +180,9 @@ func graphWorkflow(ctx *workflow.WorkflowContext) (any, error) {
 				MaxRetryInterval:     p.MaxInterval,
 			}))
 		}
-		if err := ctx.CallActivity(daprExecuteNodeName, callOpts...).Await(&updates); err != nil {
+		// The activity is registered under the node name, so the node shows under
+		// its own name in Catalyst.
+		if err := ctx.CallActivity(current, callOpts...).Await(&updates); err != nil {
 			return nil, fmt.Errorf("durable: node %q: %w", current, err)
 		}
 		state = cg.ApplyUpdates(state, updates)

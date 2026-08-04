@@ -74,7 +74,7 @@ func NewRunner(ctx context.Context, cfg Config) (*Runner, error) {
 
 	workflowName := registry.BuildWorkflowName(cfg.Framework, cfg.Name)
 
-	backend, err := durable.NewDaprBackend(workflowName)
+	backend, err := durable.NewDaprBackend(workflowName, cg.NodeNames())
 	if err != nil {
 		return nil, fmt.Errorf("goai: durable backend: %w", err)
 	}
