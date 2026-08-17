@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/cloudwego/eino v0.9.13
-	github.com/diagridio/go-ai v0.0.0
+	github.com/diagridio/go-ai v0.1.1
 )
 
 require (

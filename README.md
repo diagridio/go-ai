@@ -27,14 +27,22 @@ dependencies stay out of the core.
 
 ## Quickstart
 
-Catalyst runs the Dapr sidecar for you; you run your Go program against it. Use
-an existing project (or make one) and enable agent infrastructure on it — that
-provisions the managed workflow engine and the `agent-registry` component the
-Agents view reads.
+Catalyst runs the Dapr sidecar for you; you run your Go program against it. You need a
+project with the managed workflow engine and the `agent-registry` component the Agents
+view reads. On a cloud project, both come with the managed key-value store — the
+`default` project created for you at signup already has them, so you can skip straight
+to creating the Agent.
 
 ```bash
 diagrid login
-diagrid project update <your-project> --enable-agent-infrastructure
+
+# Only if you want a project of your own. Agent infrastructure is provisioned
+# automatically for cloud projects with the managed KV store; do NOT pass
+# --enable-agent-infrastructure here, it is BYOC/private-region only and the CLI
+# rejects it on a managed-KV cloud project.
+diagrid project create <your-project> \
+  --deploy-managed-kv --deploy-managed-pubsub --enable-managed-workflow \
+  --wait --use --ignore-if-exists
 
 # Create the Agent — it appears under Agents in the console and scopes its
 # identity into the managed agent-registry, which the runtime must have before it
