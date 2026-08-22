@@ -3,7 +3,7 @@ module github.com/diagridio/go-ai/examples/langchaingo
 go 1.26.4
 
 require (
-	github.com/diagridio/go-ai v0.0.0
+	github.com/diagridio/go-ai v0.1.1
 	github.com/diagridio/go-ai/adapters/langchaingo v0.0.0
 	github.com/tmc/langchaingo v0.1.15-0.20251029190607-e35755df7084
 )

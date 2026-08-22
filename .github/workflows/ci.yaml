@@ -1,0 +1,121 @@
+name: ci
+
+# This repository had no CI at all — the only workflows were Dependabot's, so
+# every PR merged unverified. That is a sharper problem here than in most repos
+# for two reasons: it is six independent Go modules, so a change to the root can
+# break an adapter without anything in the root failing; and the adapters are
+# published, so a broken one is discovered by whoever runs `go get`.
+#
+# Deliberately a matrix over modules rather than one `go build ./...` at the
+# root. In a multi-module repo the root's `./...` does not descend into a nested
+# module, so a single-command workflow would have looked green while never
+# compiling the adapters at all.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    # The module list is read from the tree, not hardcoded. A hardcoded list
+    # silently stops covering a module the day someone adds one, which is the
+    # failure this whole workflow exists to prevent.
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.find.outputs.modules }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: find
+        run: |
+          set -euo pipefail
+          modules=$(find . -name go.mod -not -path './.git/*' -printf '%h\n' | sort | jq -R . | jq -sc .)
+          echo "modules=$modules" >> "$GITHUB_OUTPUT"
+          echo "will build: $modules"
+
+  build:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      # Every module is reported, rather than stopping at the first failure —
+      # with six of them, "one is broken" is much less useful than knowing which.
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.discover.outputs.modules) }}
+    name: "build ${{ matrix.module }}"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # Read from the module itself so a version bump in go.mod does not
+          # silently keep testing against the old toolchain.
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: Build
+        working-directory: ${{ matrix.module }}
+        run: go build ./...
+
+      - name: Vet
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...
+
+      - name: Test
+        working-directory: ${{ matrix.module }}
+        # -race because the agent engine runs activities concurrently, which is
+        # exactly the kind of bug a non-race run reports as a flake later.
+        run: go test -race ./...
+
+      - name: Check formatting
+        working-directory: ${{ matrix.module }}
+        run: |
+          set -euo pipefail
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt would change these files:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+  consumable:
+    # The regression guard for #3, which fixed the adapters being unresolvable.
+    # Building them from inside the repo proves nothing about that: a `replace`
+    # directive makes a local build succeed while a consumer's `go get` fails,
+    # which is precisely the state #3 found. So this resolves them the way an
+    # outside user does — a throwaway module, the public proxy, and no access to
+    # this checkout.
+    needs: discover
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Resolve the adapters as an outside consumer would
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          cd "$work"
+          cat > go.mod <<'MOD'
+          module consumer-probe
+
+          go 1.26.4
+          MOD
+          for adapter in adapters/langchaingo adapters/eino; do
+            echo "--- go get github.com/diagridio/go-ai/$adapter"
+            GOFLAGS=-mod=mod GOPROXY=https://proxy.golang.org GOWORK=off \
+              go get "github.com/diagridio/go-ai/$adapter@latest"
+          done
+          echo "both adapters resolve from the public proxy"
