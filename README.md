@@ -37,9 +37,10 @@ to creating the Agent.
 diagrid login
 
 # Only if you want a project of your own. Agent infrastructure is provisioned
-# automatically for cloud projects with the managed KV store; do NOT pass
-# --enable-agent-infrastructure here, it is BYOC/private-region only and the CLI
-# rejects it on a managed-KV cloud project.
+# automatically for cloud projects with the managed KV store, so do NOT pass
+# --enable-agent-infrastructure here — the CLI rejects it on a managed-KV cloud
+# project. That flag is for BYOC/private-region projects and for cloud projects
+# created without the managed KV store.
 diagrid project create <your-project> \
   --deploy-managed-kv --deploy-managed-pubsub --enable-managed-workflow \
   --wait --use --ignore-if-exists
@@ -55,7 +56,7 @@ diagrid dev run -f catalyst.yaml --project <your-project>
 ```
 
 The bundled `catalyst.yaml` runs `go run .`. The run file is optional —
-`diagrid dev run --project <p> --app-id control-room -e GOWORK=off -- go run .`
+`diagrid dev run --project <p> --id control-room -e GOWORK=off -- go run .`
 does the same thing inline. On startup the runner registers into `agent-registry`
 (it logs the store it chose), and the agent shows up under **Agents** in the
 console. Kill the process mid-run and start it again with the same instance ID —

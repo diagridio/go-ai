@@ -40,7 +40,7 @@ fmt:
 	gofmt -w .
 
 # Examples run on Catalyst. Set DAPR_GRPC_ENDPOINT + DAPR_API_TOKEN (or use
-# `diagrid dev start`) and GOAI_KVSTORE first.
+# `diagrid dev run`) and GOAI_REGISTRY_STORE first.
 langchaingo:
 	cd examples/langchaingo && go run .
 

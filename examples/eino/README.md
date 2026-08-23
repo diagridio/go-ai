@@ -18,10 +18,14 @@ Set `PROJECT` to your Catalyst project (create one if needed).
 # Log in to Catalyst.
 diagrid login
 
-# Enable agent infrastructure on the project. This provisions the managed
-# workflow engine and the agent-registry component the Agents view reads —
-# without it the agent won't show up.
-diagrid project update $PROJECT --enable-agent-infrastructure
+# Agent infrastructure — the managed workflow engine plus the agent-registry
+# component the Agents view reads — is what makes the agent appear. A cloud
+# project with the managed KV store already has it, and passing the flag there is
+# REJECTED, so there is nothing to run for the `default` project. Enable it
+# explicitly only on a BYOC/private-region project, or a cloud project created
+# without the managed KV store:
+#
+#   diagrid project update $PROJECT --enable-agent-infrastructure
 
 # Create the Agent — it appears under Agents in the console and scopes its
 # identity into agent-registry, which the runtime must have before it can
@@ -42,7 +46,7 @@ diagrid dev run -f catalyst.yaml --project $PROJECT
 Or skip the run file and pass the same settings inline:
 
 ```bash
-diagrid dev run --project $PROJECT --app-id perimeter-watch -e GOWORK=off -- go run .
+diagrid dev run --project $PROJECT --id perimeter-watch -e GOWORK=off -- go run .
 ```
 
 A successful run prints the two node outputs and exits 0 (wording varies with the

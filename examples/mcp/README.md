@@ -40,7 +40,7 @@ diagrid dev run -f catalyst.yaml --project $PROJECT
 Or skip the run file and pass the same settings inline:
 
 ```bash
-diagrid dev run --project $PROJECT --app-id mcp-assistant -e GOWORK=off -- go run .
+diagrid dev run --project $PROJECT --id mcp-assistant -e GOWORK=off -- go run .
 ```
 
 The sidecar loads the MCP server, so the example discovers its tools and the model
