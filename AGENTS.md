@@ -177,15 +177,3 @@ example against a real sidecar.
   history is signed off. `main` is not branch-protected and CI is not a required
   check, so do not lean on the gate.
 
-## Statements in this repo that are wrong — do not propagate
-
-- `Makefile` mentions `GOAI_KVSTORE`; nothing reads it. The real variable is
-  `GOAI_REGISTRY_STORE`. (`GOAI_RUN` is read only by the examples' `main.go`.)
-- `Makefile` mentions `diagrid dev start`; no such command exists. `diagrid dev`
-  has `scaffold`, `run`, `stop`, `status`, `cleanup`.
-- `examples/README.md`, `examples/eino/README.md` and
-  `examples/langchaingo/README.md` still instruct `diagrid project update <p>
-  --enable-agent-infrastructure`. That is rejected on a managed-KV cloud
-  project, `default` included; the root README is the correct version.
-- The READMEs use `diagrid dev run --app-id`. It still works but is deprecated
-  in favour of `-a/--id`.

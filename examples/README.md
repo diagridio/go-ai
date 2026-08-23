@@ -19,7 +19,7 @@ thing. The examples ship a `catalyst.yaml`, so either works:
 diagrid dev run -f catalyst.yaml --project <project>
 
 # Inline — no run file; pass the same settings on the command line
-diagrid dev run --project <project> --app-id <id> -e GOWORK=off -- go run .
+diagrid dev run --project <project> --id <id> -e GOWORK=off -- go run .
 ```
 
 Note the `--` separating diagrid's flags from your app command (it's `-- go run .`,
@@ -44,11 +44,15 @@ configured.
 - The [`diagrid` CLI](https://docs.diagrid.io/catalyst/references/cli-reference/)
   for Catalyst, or the [Dapr CLI](https://docs.dapr.io/getting-started/) for
   local runs.
-- For Catalyst: a project with agent infrastructure enabled
-  (`diagrid project update <project> --enable-agent-infrastructure`) and an Agent
-  resource per agent (`diagrid agent create <name> --project <project>`) — an App
-  ID must be backed by an Agent resource before its runtime may register into the
-  Agents view. Each example's README has the exact commands.
+- For Catalyst: a project with agent infrastructure, and an Agent resource per
+  agent (`diagrid agent create <name> --project <project>`) — an App ID must be
+  backed by an Agent resource before its runtime may register into the Agents
+  view. Agent infrastructure comes automatically with the managed KV store, so a
+  cloud project that has one — including the `default` project created for you at
+  signup — already has it and **rejects**
+  `--enable-agent-infrastructure`. Pass that flag only on a BYOC/private-region
+  project, or a cloud project created without the managed KV store. Each
+  example's README has the exact commands.
 - `OPENAI_API_KEY` (the examples call OpenAI). Optionally `OPENAI_MODEL` (default
   `gpt-4o`). The app inherits your shell env under `diagrid dev run`.
 
