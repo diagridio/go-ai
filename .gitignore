@@ -6,6 +6,13 @@
 bin/
 dist/
 
+# `go build` in examples/<name>/ drops an extensionless binary named after the
+# directory, which none of the patterns above match. Add a line when you add an example.
+/examples/eino/eino
+/examples/identity/identity
+/examples/langchaingo/langchaingo
+/examples/mcp/mcp
+
 # Test / coverage output
 *.test
 *.out

@@ -8,6 +8,7 @@ durable Dapr Workflow, on Catalyst or a local Dapr sidecar.
 | LangChainGo | [`langchaingo/`](langchaingo/README.md) | Control Room Operator (`diagnose → reboot`) |
 | Eino | [`eino/`](eino/README.md) | Perimeter Watch (`scan → alert`) |
 | LangChainGo + MCP | [`mcp/`](mcp/README.md) | MCP Assistant: discovers and calls the sidecar's MCP tools |
+| net/http | [`identity/`](identity/README.md) | none — verifies inbound user tokens and propagates the caller |
 
 ## Running on Catalyst — declarative vs inline
 
@@ -56,6 +57,6 @@ configured.
 - `OPENAI_API_KEY` (the examples call OpenAI). Optionally `OPENAI_MODEL` (default
   `gpt-4o`). The app inherits your shell env under `diagrid dev run`.
 
-Every example goes through `durable.DaprBackend`, so every run is durable — each
+Every agent example goes through `durable.DaprBackend`, so every run is durable — each
 node is a checkpointed workflow activity that resumes after a crash. There's no
 non-durable path.
