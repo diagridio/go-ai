@@ -105,6 +105,42 @@ out, err := runner.Invoke(ctx, agent.State{"input": "..."},
 there's no backend or registry to construct. Reuse an `InstanceID` to resume an
 interrupted run.
 
+## Usage analytics
+
+`NewRunner` reports one anonymous usage event when it is called, once per
+process. The Go module proxy publishes no download counts at all, so this is
+how Diagrid sees which versions run on which platforms. Because it is one event per process, a
+Kubernetes deployment produces one event per replica per restart: the numbers
+count process starts, not deployments or users.
+
+**What is sent:** the package name and this module's own version, operating
+system, architecture, Go version, the agent framework and the installed
+version of its library (`framework`, `framework_version`), `kind=agent`,
+whether the process points at Catalyst or at a plain Dapr sidecar (`target`),
+and whether it runs under a CI variable (`ci`). Nothing else: no application
+data, configuration, app IDs, prompts, or hostnames. The receiving service is
+[Scarf](https://scarf.sh). It derives coarse company and location information
+from the request IP. How Scarf handles that data is described in
+[Scarf's privacy policy](https://about.scarf.sh/privacy-policy).
+
+**It never gets in the way:** the request runs on a background goroutine with
+a one second timeout on the whole HTTP round trip, every failure is swallowed,
+and the calling goroutine never waits. Blocked egress and air-gapped clusters
+behave normally. Nothing is written to your application's output; a `DEBUG`
+line on the default `log/slog` logger records whether the event was sent or
+skipped, for operators who want to confirm an opt-out.
+
+To opt out, set any of these environment variables before starting your
+application:
+
+```bash
+export DO_NOT_TRACK=1
+# or
+export SCARF_NO_ANALYTICS=1
+# or
+export DIAGRID_NO_ANALYTICS=1
+```
+
 ## Verified identity
 
 Wrap your handler to verify the caller's `X-Diagrid-User-Token` on every request:
