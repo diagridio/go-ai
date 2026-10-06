@@ -10,6 +10,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime/debug"
+	"strings"
 
 	"github.com/diagridio/go-ai/agent"
 	"github.com/diagridio/go-ai/durable"
@@ -17,6 +19,38 @@ import (
 
 	daprclient "github.com/dapr/go-sdk/client"
 )
+
+// frameworkModulePaths maps a framework label (lower-cased) to the module
+// path that carries it, so the framework_version usage dimension can read its
+// installed version from build info. Checked against
+// adapters/langchaingo/go.mod and adapters/eino/go.mod for the real paths.
+// Used only for that dimension, so a miss costs nothing.
+var frameworkModulePaths = map[string]string{
+	"langchaingo": "github.com/tmc/langchaingo",
+	"eino":        "github.com/cloudwego/eino",
+}
+
+// frameworkVersion returns the installed version of the module behind
+// framework, matched case-insensitively against frameworkModulePaths, or ""
+// when the framework is unknown or its module is not in build info (for
+// example because the caller vendors it via something other than a module
+// dependency).
+func frameworkVersion(framework string) string {
+	modulePath, ok := frameworkModulePaths[strings.ToLower(strings.TrimSpace(framework))]
+	if !ok {
+		return ""
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	for _, dep := range info.Deps {
+		if dep.Path == modulePath {
+			return dep.Version
+		}
+	}
+	return ""
+}
 
 // Config for NewRunner. Graph, Name, and Framework are required.
 type Config struct {
@@ -67,6 +101,15 @@ func NewRunner(ctx context.Context, cfg Config) (*Runner, error) {
 	if cfg.Framework == "" {
 		return nil, fmt.Errorf("goai: Framework is required")
 	}
+
+	// One anonymous usage event per process, never blocking. See
+	// analytics.go and the README "Usage analytics" section.
+	reportUsage("go-ai", map[string]string{
+		"kind":              "agent",
+		"framework":         cfg.Framework,
+		"framework_version": frameworkVersion(cfg.Framework),
+	})
+
 	cg, err := cfg.Graph.Compile()
 	if err != nil {
 		return nil, fmt.Errorf("goai: compile graph: %w", err)
