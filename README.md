@@ -1,26 +1,41 @@
-# go-ai
+# Durable execution for Go AI agents
 
-Durable AI agents in Go, running on [Diagrid Catalyst](https://www.diagrid.io/catalyst).
+[![Go Reference](https://pkg.go.dev/badge/github.com/diagridio/go-ai.svg)](https://pkg.go.dev/github.com/diagridio/go-ai)
+[![ci](https://github.com/diagridio/go-ai/actions/workflows/ci.yaml/badge.svg)](https://github.com/diagridio/go-ai/actions/workflows/ci.yaml)
+
+Durable AI agents in Go, running on [Diagrid](https://www.diagrid.io), built on
+[Dapr](https://dapr.io).
 
 Build an agent as a small graph of nodes with a Go AI framework (LangChainGo,
 Eino, …) and run it as a Dapr Workflow: every node becomes a checkpointed
 activity, so if the process dies it resumes from the last completed node instead
-of starting over.
+of starting over. Activities run at least once, so a node that was interrupted
+runs again on resume: keep its side effects idempotent.
 
-A `Runner` takes the graph, registers it as an agent, and runs it on Catalyst —
+A `Runner` takes the graph, registers it as an agent, and runs it on Diagrid —
 no backend or registry to wire up yourself. A framework plugs in through its node
 constructors (`langchaingo.ModelNode`, `eino.ChatModelNode`), so swapping
 LangChainGo for Eino doesn't touch your orchestration code.
+
+## Install
+
+```bash
+go get github.com/diagridio/go-ai
+```
+
+The framework adapters are separate modules:
+`go get github.com/diagridio/go-ai/adapters/langchaingo` or
+`go get github.com/diagridio/go-ai/adapters/eino`.
 
 ## Packages
 
 | Package | What it does |
 |---|---|
 | `agent` | The graph model — `Graph`, `NodeFunc`, conditional edges — plus an in-process interpreter (`Execute`) for testing wiring without a sidecar. Standard library only. |
-| `durable` | `DaprBackend`: runs a graph as a Dapr Workflow on Catalyst. One generic workflow, one execute-node activity. This is the only backend — there's no non-durable path. |
+| `durable` | `DaprBackend`: runs a graph as a Dapr Workflow on Diagrid. One generic workflow, one execute-node activity. This is the only backend — there's no non-durable path. |
 | `registry` | The agent directory — the `agents:<team>:<name>` key scheme that lets agents find each other in a shared store. |
 | `identity` | Verified inbound identity: `net/http` middleware that checks the caller's `X-Diagrid-User-Token` against the sidecar's JWKS, plus an identity-aware `http.Client` that propagates the caller on outbound calls. |
-| `goai` (root) | The `Runner`. Give it a graph and a name; it connects to Catalyst, registers the agent, and runs it. |
+| `goai` (root) | The `Runner`. Give it a graph and a name; it connects to Diagrid, registers the agent, and runs it. |
 | `adapters/langchaingo`, `adapters/eino` | Node constructors that turn a framework's models/chains into graph nodes. |
 
 Adapter and example packages are separate modules so each framework's
@@ -28,7 +43,19 @@ dependencies stay out of the core.
 
 ## Quickstart
 
-Catalyst runs the Dapr sidecar for you; you run your Go program against it. You need a
+**Prerequisites:** Go 1.26.4+, the Diagrid CLI (`diagrid`), and a
+[Diagrid account](https://catalyst.diagrid.io). Diagrid has a permanent free tier.
+
+Install the Diagrid CLI on macOS or Linux with:
+
+```bash
+curl -o- https://downloads.diagrid.io/cli/install.sh | bash
+```
+
+For Windows and other options, see the
+[Diagrid CLI install instructions](https://docs.diagrid.io/catalyst/references/cli-reference/).
+
+Diagrid runs the Dapr sidecar for you; you run your Go program against it. You need a
 project with the managed workflow engine and the `agent-registry` component the Agents
 view reads. On a cloud project, both come with the managed key-value store — the
 `default` project created for you at signup already has them, so you can skip straight
@@ -60,12 +87,12 @@ The bundled `catalyst.yaml` runs `go run .`. The run file is optional —
 `diagrid dev run --project <p> --id control-room -e GOWORK=off -- go run .`
 does the same thing inline. On startup the runner registers into `agent-registry`
 (it logs the store it chose), and the agent shows up under **Agents** in the
-console. Kill the process mid-run and start it again with the same instance ID —
-Catalyst picks the workflow back up where it left off.
+Diagrid Console. Kill the process mid-run and start it again with the same instance ID —
+Diagrid picks the workflow back up where it left off.
 
-Each example has a README with the full story (local Dapr, Catalyst, crash
-recovery): [`examples/langchaingo`](examples/langchaingo/README.md),
-[`examples/eino`](examples/eino/README.md).
+Each example has a README with the full story (local Dapr, Diagrid, crash
+recovery): [`examples/langchaingo`](https://github.com/diagridio/go-ai/blob/main/examples/langchaingo/README.md),
+[`examples/eino`](https://github.com/diagridio/go-ai/blob/main/examples/eino/README.md).
 
 Prefer a local sidecar?
 
@@ -101,7 +128,7 @@ out, err := runner.Invoke(ctx, agent.State{"input": "..."},
     goai.InvokeOptions{InstanceID: "control-room-001"})
 ```
 
-`NewRunner` connects to Catalyst, registers the agent, and runs the graph —
+`NewRunner` connects to Diagrid, registers the agent, and runs the graph —
 there's no backend or registry to construct. Reuse an `InstanceID` to resume an
 interrupted run.
 
@@ -116,7 +143,7 @@ count process starts, not deployments or users.
 **What is sent:** the package name and this module's own version, operating
 system, architecture, Go version, the agent framework and the installed
 version of its library (`framework`, `framework_version`), `kind=agent`,
-whether the process points at Catalyst or at a plain Dapr sidecar (`target`),
+whether the process points at Diagrid or at a plain Dapr sidecar (`target`),
 and whether it runs under a CI variable (`ci`). Nothing else: no application
 data, configuration, app IDs, prompts, or hostnames. The receiving service is
 [Scarf](https://scarf.sh). It derives coarse company and location information
@@ -143,102 +170,16 @@ export DIAGRID_NO_ANALYTICS=1
 
 ## Verified identity
 
-Wrap your handler to verify the caller's `X-Diagrid-User-Token` on every request:
+The `identity` package verifies the caller's `X-Diagrid-User-Token` on every
+inbound request and propagates it on outbound MCP and sub-agent calls:
 
 ```go
 oauth := identity.OAuthConfig{Scopes: []string{"agent.invoke"}}
 http.ListenAndServe(":8080", identity.Middleware(oauth)(mux))
 ```
 
-The issuer, JWKS endpoint and audience are discovered from the sidecar, so
-there's nothing else to configure. A handler reads the verified caller with
-`identity.UserFromContext(r.Context())`; a request that fails verification never
-reaches it, and comes back as `{"error": "oauth.<reason>"}` with 401, 403 or 503.
-`VerifiedUser.Scopes` arrives deduplicated and ordinally sorted, which is what
-every Diagrid SDK hands the handler for the same token.
-
-`RequireAuth` governs the no-token case alone. It is unset by default, which
-resolves to true, so `OAuthConfig{}` rejects a request carrying no token with
-401 `oauth.missing_token`. Set it to false (it's a `*bool`) when health and
-readiness endpoints have to share the app — a token that *is* present is always
-verified either way, and an invalid one is always rejected.
-
-To check the token yourself, supply a `TokenVerifier` to the middleware rather
-than to the policy:
-
-```go
-handler := identity.Middleware(oauth, identity.WithVerifier(myVerifier))(mux)
-```
-
-### Discovery precedence
-
-Coordinates are resolved from four sources, first answer winning:
-
-1. **Explicit** `OAuthConfig` fields (`Issuer`, `JWKSURI`, `Audience`).
-2. **The local sidecar** `/v1.0/metadata`, reached on loopback at the port in
-   `CATALYST_DAPR_HTTP_PORT` or `DAPR_HTTP_PORT`.
-3. **The remote sidecar** `/v1.0/metadata`, at `DAPR_HTTP_ENDPOINT`, with
-   `DAPR_API_TOKEN` sent as the `dapr-api-token` header when it is set. This is
-   what `diagrid dev run` gives an app on a developer machine, where nothing is
-   listening on loopback.
-4. **The environment**: `DIAGRID_DP_SENTRY_ISSUER` and
-   `DIAGRID_DP_SENTRY_AUDIENCE`.
-
-Local precedes remote deliberately: a deployed in-cluster app keeps answering
-from the loopback call rather than paying for a network round trip, and the
-remote endpoint is not contacted at all when the local one answered. The JWKS
-endpoint itself resolves explicit > published by the sidecar for the issuer
-being verified > derived as `<issuer>/jwks.json`.
-
-A JWKS endpoint must be https. Loopback is exempt, because that is where the
-local sidecar publishes its keys. `AllowInsecureJWKS` is the deliberate opt-out
-for everything else, and it relaxes the rule to plain **http only** — a `file://`
-or otherwise non-http(s) URI stays refused with the flag set. The key set is the
-entire root of trust: an on-path attacker who rewrites a plaintext response
-mints tokens this package would accept.
-
-### Status and code
-
-| Status | Code | When |
-| --- | --- | --- |
-| 401 | `oauth.missing_token` | No `X-Diagrid-User-Token` and `RequireAuth` resolves to true |
-| 503 | `oauth.not_configured` | No identity coordinates could be resolved, so no verifier could be built |
-| 503 | `oauth.verifier_unavailable` | The verifier could not answer: JWKS key material has not loaded, or verification failed unexpectedly, so the token was neither accepted nor rejected |
-| 401 | `oauth.expired` | The `exp` claim is in the past (120s clock skew allowed) |
-| 401 | `oauth.invalid_issuer` | The `iss` claim does not match the resolved issuer |
-| 401 | `oauth.invalid_audience` | An audience is configured and the `aud` claim does not contain it |
-| 401 | `oauth.invalid_signature` | The signature does not verify against the JWKS key the token names |
-| 401 | `oauth.decode_error` | The token is not a well-formed JWT |
-| 401 | `oauth.invalid_token` | Well-formed and correctly signed but unacceptable: a signing algorithm outside the RS256/ES256 allowlist, or a missing `exp`/`iss`/`sub` |
-| 403 | `oauth.missing_scope` | The verified token lacks a scope `OAuthConfig.Scopes` requires |
-
-Every rejection carries `Cache-Control: no-store`, because an authorization
-decision is good for exactly one request.
-
-Outbound MCP and sub-agent calls carry the caller on behalf of whom you're
-acting. Construct the client once and make ordinary calls with the request
-context — there are no identity headers to assemble:
-
-```go
-client := identity.NewHTTPClient(nil)   // once, at startup
-
-req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, mcpURL, nil)
-resp, err := client.Do(req)
-```
-
-It's a plain `*http.Client`, so it goes wherever one is expected — an MCP
-client, a generated API client, anything. The caller's token is read from the
-request context at send time, which is what makes one long-lived shared client
-safe: concurrent requests each carry their own caller. Outside a verified
-request (a cron or pub/sub trigger) the call goes out unauthenticated with the
-header omitted rather than sent empty, and a redirect off the addressed origin
-drops the token instead of handing it to the host the redirect names.
-
-If you already own a client you can't replace, install the same behaviour on it:
-
-```go
-owned.Transport = &identity.Transport{Base: owned.Transport}
-```
+Discovery precedence, JWKS rules, the status codes and the outbound client are
+covered in [docs/identity.md](https://github.com/diagridio/go-ai/blob/main/docs/identity.md).
 
 ## Adding a framework
 
@@ -251,15 +192,26 @@ A framework needs one thing: node constructors that turn its models/chains into
 Go 1.26.4+ (the Dapr Go SDK needs it) and the Dapr CLI for local runs. Tests are
 offline — `make test` runs the engine and registry with no sidecar.
 
+## Learn more
+
+- [Diagrid documentation](https://docs.diagrid.io/catalyst/)
+- Sibling SDKs for other languages:
+  [python-ai](https://github.com/diagridio/python-ai),
+  [typescript-ai](https://github.com/diagridio/typescript-ai),
+  [dotnet-ai](https://github.com/diagridio/dotnet-ai),
+  [java-ai](https://github.com/diagridio/java-ai),
+  [rust-ai](https://github.com/diagridio/rust-ai)
+
 ## Layout
 
 ```
 go-ai/
 ├── runner.go        # goai.Runner
 ├── agent/           # graph model + in-process interpreter
-├── registry/        # agent directory → Catalyst agent-registry component
+├── registry/        # agent directory → Diagrid agent-registry component
 ├── identity/        # inbound token verification + identity-aware http.Client
 ├── durable/         # DaprBackend
+├── docs/            # reference docs (identity)
 ├── adapters/        # langchaingo, eino (own modules)
 └── examples/        # runnable samples by framework (own modules)
 ```
