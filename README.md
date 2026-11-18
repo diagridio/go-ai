@@ -41,9 +41,17 @@ dependencies stay out of the core.
 
 ## Quickstart
 
-**Prerequisites:** Go 1.26.4+, the
-[Diagrid CLI](https://docs.diagrid.io/catalyst/references/cli-reference/)
-(`diagrid`), and a [Catalyst account](https://catalyst.diagrid.io). Catalyst has a permanent free tier, with Cloud Plus for higher limits.
+**Prerequisites:** Go 1.26.4+, the Diagrid CLI (`diagrid`), and a
+[Catalyst account](https://catalyst.diagrid.io). Catalyst has a permanent free tier, with Cloud Plus for higher limits.
+
+Install the Diagrid CLI on macOS or Linux with:
+
+```bash
+curl -o- https://downloads.diagrid.io/cli/install.sh | bash
+```
+
+For Windows and other options, see the
+[Diagrid CLI install instructions](https://docs.diagrid.io/catalyst/references/cli-reference/).
 
 Catalyst runs the Dapr sidecar for you; you run your Go program against it. You need a
 project with the managed workflow engine and the `agent-registry` component the Agents
