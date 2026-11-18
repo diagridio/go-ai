@@ -3,14 +3,16 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/diagridio/go-ai.svg)](https://pkg.go.dev/github.com/diagridio/go-ai)
 [![ci](https://github.com/diagridio/go-ai/actions/workflows/ci.yaml/badge.svg)](https://github.com/diagridio/go-ai/actions/workflows/ci.yaml)
 
-Durable AI agents in Go, running on [Diagrid Catalyst](https://www.diagrid.io/catalyst).
+Durable AI agents in Go, running on [Diagrid](https://www.diagrid.io), built on
+[Dapr](https://dapr.io).
 
 Build an agent as a small graph of nodes with a Go AI framework (LangChainGo,
 Eino, …) and run it as a Dapr Workflow: every node becomes a checkpointed
 activity, so if the process dies it resumes from the last completed node instead
-of starting over.
+of starting over. Activities run at least once, so a node that was interrupted
+runs again on resume: keep its side effects idempotent.
 
-A `Runner` takes the graph, registers it as an agent, and runs it on Catalyst —
+A `Runner` takes the graph, registers it as an agent, and runs it on Diagrid —
 no backend or registry to wire up yourself. A framework plugs in through its node
 constructors (`langchaingo.ModelNode`, `eino.ChatModelNode`), so swapping
 LangChainGo for Eino doesn't touch your orchestration code.
@@ -30,10 +32,10 @@ The framework adapters are separate modules:
 | Package | What it does |
 |---|---|
 | `agent` | The graph model — `Graph`, `NodeFunc`, conditional edges — plus an in-process interpreter (`Execute`) for testing wiring without a sidecar. Standard library only. |
-| `durable` | `DaprBackend`: runs a graph as a Dapr Workflow on Catalyst. One generic workflow, one execute-node activity. This is the only backend — there's no non-durable path. |
+| `durable` | `DaprBackend`: runs a graph as a Dapr Workflow on Diagrid. One generic workflow, one execute-node activity. This is the only backend — there's no non-durable path. |
 | `registry` | The agent directory — the `agents:<team>:<name>` key scheme that lets agents find each other in a shared store. |
 | `identity` | Verified inbound identity: `net/http` middleware that checks the caller's `X-Diagrid-User-Token` against the sidecar's JWKS, plus an identity-aware `http.Client` that propagates the caller on outbound calls. |
-| `goai` (root) | The `Runner`. Give it a graph and a name; it connects to Catalyst, registers the agent, and runs it. |
+| `goai` (root) | The `Runner`. Give it a graph and a name; it connects to Diagrid, registers the agent, and runs it. |
 | `adapters/langchaingo`, `adapters/eino` | Node constructors that turn a framework's models/chains into graph nodes. |
 
 Adapter and example packages are separate modules so each framework's
@@ -42,7 +44,7 @@ dependencies stay out of the core.
 ## Quickstart
 
 **Prerequisites:** Go 1.26.4+, the Diagrid CLI (`diagrid`), and a
-[Catalyst account](https://catalyst.diagrid.io). Catalyst has a permanent free tier, with Cloud Plus for higher limits.
+[Diagrid account](https://catalyst.diagrid.io). Diagrid has a permanent free tier.
 
 Install the Diagrid CLI on macOS or Linux with:
 
@@ -53,7 +55,7 @@ curl -o- https://downloads.diagrid.io/cli/install.sh | bash
 For Windows and other options, see the
 [Diagrid CLI install instructions](https://docs.diagrid.io/catalyst/references/cli-reference/).
 
-Catalyst runs the Dapr sidecar for you; you run your Go program against it. You need a
+Diagrid runs the Dapr sidecar for you; you run your Go program against it. You need a
 project with the managed workflow engine and the `agent-registry` component the Agents
 view reads. On a cloud project, both come with the managed key-value store — the
 `default` project created for you at signup already has them, so you can skip straight
@@ -85,10 +87,10 @@ The bundled `catalyst.yaml` runs `go run .`. The run file is optional —
 `diagrid dev run --project <p> --id control-room -e GOWORK=off -- go run .`
 does the same thing inline. On startup the runner registers into `agent-registry`
 (it logs the store it chose), and the agent shows up under **Agents** in the
-console. Kill the process mid-run and start it again with the same instance ID —
-Catalyst picks the workflow back up where it left off.
+Diagrid Console. Kill the process mid-run and start it again with the same instance ID —
+Diagrid picks the workflow back up where it left off.
 
-Each example has a README with the full story (local Dapr, Catalyst, crash
+Each example has a README with the full story (local Dapr, Diagrid, crash
 recovery): [`examples/langchaingo`](https://github.com/diagridio/go-ai/blob/main/examples/langchaingo/README.md),
 [`examples/eino`](https://github.com/diagridio/go-ai/blob/main/examples/eino/README.md).
 
@@ -126,7 +128,7 @@ out, err := runner.Invoke(ctx, agent.State{"input": "..."},
     goai.InvokeOptions{InstanceID: "control-room-001"})
 ```
 
-`NewRunner` connects to Catalyst, registers the agent, and runs the graph —
+`NewRunner` connects to Diagrid, registers the agent, and runs the graph —
 there's no backend or registry to construct. Reuse an `InstanceID` to resume an
 interrupted run.
 
@@ -141,7 +143,7 @@ count process starts, not deployments or users.
 **What is sent:** the package name and this module's own version, operating
 system, architecture, Go version, the agent framework and the installed
 version of its library (`framework`, `framework_version`), `kind=agent`,
-whether the process points at Catalyst or at a plain Dapr sidecar (`target`),
+whether the process points at Diagrid or at a plain Dapr sidecar (`target`),
 and whether it runs under a CI variable (`ci`). Nothing else: no application
 data, configuration, app IDs, prompts, or hostnames. The receiving service is
 [Scarf](https://scarf.sh). It derives coarse company and location information
@@ -192,7 +194,7 @@ offline — `make test` runs the engine and registry with no sidecar.
 
 ## Learn more
 
-- [Catalyst documentation](https://docs.diagrid.io/catalyst/)
+- [Diagrid documentation](https://docs.diagrid.io/catalyst/)
 - Sibling SDKs for other languages:
   [python-ai](https://github.com/diagridio/python-ai),
   [typescript-ai](https://github.com/diagridio/typescript-ai),
@@ -206,7 +208,7 @@ offline — `make test` runs the engine and registry with no sidecar.
 go-ai/
 ├── runner.go        # goai.Runner
 ├── agent/           # graph model + in-process interpreter
-├── registry/        # agent directory → Catalyst agent-registry component
+├── registry/        # agent directory → Diagrid agent-registry component
 ├── identity/        # inbound token verification + identity-aware http.Client
 ├── durable/         # DaprBackend
 ├── docs/            # reference docs (identity)
